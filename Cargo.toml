@@ -1,0 +1,12 @@
+[package]
+name = "arena"
+version = "0.1.0"
+authors = ["dyens <dyens@mail.ru>"]
+
+[dependencies]
+piston_window = "*"
+piston2d-graphics = "*"
+find_folder = "*"
+gfx_device_gl = "*"
+nalgebra = "*"
+ncollide = "*"
