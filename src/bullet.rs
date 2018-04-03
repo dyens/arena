@@ -28,6 +28,9 @@ impl Object for Bullet {
     fn update(&mut self, dt: f64) {
         let bullet_speed = 200.0;
         self.fwd(bullet_speed * dt);
+        if self.bullet.trans.on_border() == true {
+            self.to_be_removed = true;
+        }
     }
     fn render(&mut self, v: Matrix2d, g: &mut G2d) {
         self.bullet.render(v, g);

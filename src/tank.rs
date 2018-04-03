@@ -1,6 +1,5 @@
 use piston_window::*;
 use gfx_device_gl::Resources;
-use std::f64::consts::PI;
 use graphics::math::Matrix2d;
 use nc::query::PointQuery;
 use na::Isometry2;
@@ -15,17 +14,23 @@ pub struct Tank {
     pub health: u32,
     pub is_destroyed: bool,
     collider: Cuboid2f,
-    point_to: Vec2,
 }
 
 impl Tank {
-    pub fn new() -> Tank {
+
+    pub fn new(sprite: Option<&Texture<Resources>>,
+               s_width: f64,
+               s_height: f64) -> Tank {
+
+        let (width, height) = match sprite {
+            Some(ref texture) => texture.get_size(),
+            None => (100, 100) //default params of texture
+        };
         Tank {
-            tank: Component::new(),
+            tank: Component::new(sprite, s_width, s_height),
             health: 100,
             is_destroyed: false,
-            collider: Cuboid2f::new(Vec2::new(38.0, 65.0)),
-            point_to: Vec2::new(0.0, 0.0),
+            collider: Cuboid2f::new(Vec2::new(width as f64 / 2.0, height as f64 / 2.0)),
         }
     }
 
@@ -44,15 +49,16 @@ impl Tank {
         }
     }
 
-    pub fn fire(&self, sprite: Texture<Resources>) -> Bullet {
+    pub fn fire(&self, sprite: Option<&Texture<Resources>>,
+                s_width: f64,
+                s_height: f64) -> Bullet {
         let mut bul = Bullet {
-            bullet: Component::new(),
+            bullet: Component::new(sprite, s_width, s_height),
             to_be_removed: false,
         };
         bul.mov_to(self.tank.trans.pos);
         bul.rot_to(self.tank.trans.rot);
         bul.fwd(125.0);
-        bul.bullet.set_sprite(sprite);
         bul
     }
 }
@@ -72,8 +78,10 @@ impl Object for Tank {
     fn fwd(&mut self, d: f64) {
         self.tank.trans.fwd(d);
     }
+
+    #[allow(unused_variables)]
     fn update(&mut self, dt: f64) {
-        self.tank.trans.pos = self.tank.trans.pos;
+//        self.tank.trans.pos = self.tank.trans.pos;
     }
     fn render(&mut self, v: Matrix2d, g: &mut G2d, ) {
         self.tank.render(v, g);
