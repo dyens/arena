@@ -38,7 +38,7 @@ impl Tank {
             Some(ref texture) => texture.get_size(),
             None => (TANK_W, TANK_H) // default value
         };
-        println!("Tank texture size: {:?}, {:?}", width, height);
+        //println!("Tank texture size: {:?}, {:?}", width, height);
         // scale
         let width = (width as f64) * 0.3;
         let height = (height as f64) * 0.3;
@@ -78,7 +78,6 @@ impl Tank {
             None => (100, 100) //default params of texture
         };
         let fwd = (height + 10) as f64;
-        println!("{:?}", fwd);
         bul.fwd(fwd);
         bul
     }
@@ -91,14 +90,44 @@ impl Tank {
             .map(|x| (x.tank.trans.pos.x, x.tank.trans.pos.y, x.tank.trans.rot)).collect::<Vec<(f64, f64, f64)>>();
 
         let bullets_data = game.bullets.iter()
-            .filter(|x|
-                    (x.bullet.trans.rot.tan() -
-                     (x.bullet.trans.pos.x - self.tank.trans.pos.x) / (x.bullet.trans.pos.x - self.tank.trans.pos.x)
-                    ).abs() < 4.0)
-            .take(3) // take 3 bullet
-            .map(|x| (x.bullet.trans.pos.x, x.bullet.trans.pos.y, x.bullet.trans.rot)).collect::<Vec<(f64, f64, f64)>>();
+            .filter(|x| {
+                let xb = x.bullet.trans.pos.x;
+                let xt = self.tank.trans.pos.x;
+                let yb = x.bullet.trans.pos.y;
+                let yt = self.tank.trans.pos.y;
+
+                let tg_alpha = (xt - xb) / (yt -yb);
+                let alpha = tg_alpha.atan();
+
+                let r = x.bullet.trans.rot;
+
+                let v = alpha.cos() * r.cos() - alpha.sin() * r.sin();
+                v > 0.99
+            })
+            .take(2) // take 2 bullet
+            .map(|x| (x.bullet.trans.pos.x,
+                      x.bullet.trans.pos.y,
+                      x.bullet.trans.rot)
+            ).collect::<Vec<(f64, f64, f64)>>();
 
         println!("{:?}", bullets_data.len());
+
+        let mut data = Vec::with_capacity(12);
+        data.push(self.tank.trans.pos.x);
+        data.push(self.tank.trans.pos.y);
+        data.push(self.tank.trans.rot);
+        for p in players_data {
+            data.push(p.0);
+            data.push(p.1);
+            data.push(p.2);
+        }
+        for b in bullets_data {
+            data.push(b.0);
+            data.push(b.1);
+            data.push(b.2);
+        }
+
+
         TankAction::FWD
     }
 

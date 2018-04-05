@@ -21,7 +21,7 @@ impl Bullet {
             Some(ref texture) => texture.get_size(),
             None => (BULLET_W, BULLET_H) // default value
         };
-        println!("Bullet texture size: {:?}, {:?}", width, height);
+        //println!("Bullet texture size: {:?}, {:?}", width, height);
         // scale
         let width = (width as f64) * 0.3;
         let height = (height as f64) * 0.3;
