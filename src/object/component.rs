@@ -7,28 +7,59 @@ use object::transform::Transform;
 pub struct Component {
     pub trans: Transform,
     pub sprite: Option<Texture<Resources>>,
+
+    pub width: f64,
+    pub height: f64,
+    pub s_width: f64,
+    pub s_height: f64,
 }
 
 impl Component {
 
     pub fn new(sprite: Option<&Texture<Resources>>,
-               s_width: f64,
-               s_height: f64) -> Component {
+               s_width: f64, s_height: f64,
+               t_width: f64, t_height: f64,
+    ) -> Component {
+
 
         match sprite {
             Some(texture) =>  {
                 return Component {
-                    trans: Transform::new(s_width, s_height),
+                    trans: Transform::new(),
                     sprite: Some(texture.clone()),
+                    s_width: s_width,
+                    s_height: s_height,
+                    width: t_width,
+                    height: t_height,
                 }
             }
             None => {
                 return Component {
-                    trans: Transform::new(s_width, s_height),
+                    trans: Transform::new(),
                     sprite: None,
+                    s_width: s_width,
+                    s_height: s_height,
+                    width: t_width,
+                    height: t_height,
                 }
             }
         }
+    }
+
+    pub fn on_border(&mut self) -> bool {
+        let x = self.trans.pos.x;
+        let y = self.trans.pos.y;
+
+        let half_w = self.width / 2.0;
+        let half_h = self.height / 2.0;
+
+        if x + half_w >= self.s_width ||
+            x - half_w <= 0.0 ||
+            y + half_h >= self.s_height ||
+            y - half_h <= 0.0 {
+                return true;
+            }
+        false
     }
 
     pub fn render(&mut self, v: Matrix2d, g: &mut G2d) {

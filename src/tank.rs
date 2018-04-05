@@ -8,6 +8,18 @@ use object::Pnt2;
 use object::{Object, Cuboid2f, Vec2};
 use object::component::Component;
 use bullet::Bullet;
+use game::Game;
+
+
+const TANK_W: u32 = 150;
+const TANK_H: u32 = 200;
+
+pub enum TankAction {
+    FWD,
+    ROT,
+    UROT,
+    FIRE
+}
 
 pub struct Tank {
     pub tank: Component,
@@ -24,10 +36,15 @@ impl Tank {
 
         let (width, height) = match sprite {
             Some(ref texture) => texture.get_size(),
-            None => (100, 100) //default params of texture
+            None => (TANK_W, TANK_H) // default value
         };
+        println!("Tank texture size: {:?}, {:?}", width, height);
+        // scale
+        let width = (width as f64) * 0.3;
+        let height = (height as f64) * 0.3;
+
         Tank {
-            tank: Component::new(sprite, s_width, s_height),
+            tank: Component::new(sprite, s_width, s_height, width, height),
             health: 100,
             is_destroyed: false,
             collider: Cuboid2f::new(Vec2::new(width as f64 / 2.0, height as f64 / 2.0)),
@@ -49,18 +66,43 @@ impl Tank {
         }
     }
 
-    pub fn fire(&self, sprite: Option<&Texture<Resources>>,
-                s_width: f64,
-                s_height: f64) -> Bullet {
-        let mut bul = Bullet {
-            bullet: Component::new(sprite, s_width, s_height),
-            to_be_removed: false,
-        };
+    pub fn fire(&self,
+                sprite: Option<&Texture<Resources>>) -> Bullet {
+        let mut bul = Bullet::new(sprite,
+                                  self.tank.s_width,
+                                  self.tank.s_height,);
         bul.mov_to(self.tank.trans.pos);
         bul.rot_to(self.tank.trans.rot);
-        bul.fwd(125.0);
+        let (_width, height) = match sprite {
+            Some(ref texture) => texture.get_size(),
+            None => (100, 100) //default params of texture
+        };
+        let fwd = (height + 10) as f64;
+        println!("{:?}", fwd);
+        bul.fwd(fwd);
         bul
     }
+
+
+    pub fn get_action(&self, game: &Game) -> TankAction {
+        let players_data = game.players.iter()
+            .filter(|x| x.tank.trans.pos != self.tank.trans.pos)
+            .take(1) // we have 1 enemy
+            .map(|x| (x.tank.trans.pos.x, x.tank.trans.pos.y, x.tank.trans.rot)).collect::<Vec<(f64, f64, f64)>>();
+
+        let bullets_data = game.bullets.iter()
+            .filter(|x|
+                    (x.bullet.trans.rot.tan() -
+                     (x.bullet.trans.pos.x - self.tank.trans.pos.x) / (x.bullet.trans.pos.x - self.tank.trans.pos.x)
+                    ).abs() < 4.0)
+            .take(3) // take 3 bullet
+            .map(|x| (x.bullet.trans.pos.x, x.bullet.trans.pos.y, x.bullet.trans.rot)).collect::<Vec<(f64, f64, f64)>>();
+
+        println!("{:?}", bullets_data.len());
+        TankAction::FWD
+    }
+
+
 }
 impl Object for Tank {
     fn mov(&mut self, pos: Vec2) {
@@ -76,7 +118,11 @@ impl Object for Tank {
         self.tank.trans.rot_to(r);
     }
     fn fwd(&mut self, d: f64) {
+        let pos = self.tank.trans.pos;
         self.tank.trans.fwd(d);
+        if self.tank.on_border() == true {
+            self.tank.trans.pos = pos;
+        }
     }
 
     #[allow(unused_variables)]
