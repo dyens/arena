@@ -178,13 +178,18 @@ impl<'a> Game<'a> {
                     self.players[index].rot(-1.0 * upd.dt);
                 }
                 TankAction::FIRE => {
-                    self.players[index].fire(
-                        self.sprites.get("bullet_sprite"));
+                    if self.players[index].can_fire() == true {
+                        self.bullets.push(
+                            self.players[index].fire(
+                                self.sprites.get("bullet_sprite")));
+                    }
                 }
             }
         }
 
-
+        for player in &mut self.players {
+            player.update(upd.dt);
+        }
 
         for bullet in &mut self.bullets {
             for player in &mut self.players {
@@ -192,7 +197,6 @@ impl<'a> Game<'a> {
                     player.shooted();
                     bullet.to_be_removed = true;
                 }
-                player.update(upd.dt);
             }
             bullet.update(upd.dt);
         }
@@ -257,12 +261,14 @@ impl<'a> Game<'a> {
             Some(player_index) => {
                 if let Button::Keyboard(Key::Space) =
                     button_args.button {
-                    self.bullets.push(
-                        self.players[player_index]
-                            .fire(
-                                self.sprites.get("bullet_sprite"),
-                            ));
-                }
+                        if self.players[player_index].can_fire() == true {
+                            self.bullets.push(
+                                self.players[player_index]
+                                    .fire(
+                                        self.sprites.get("bullet_sprite"),
+                                    ));
+                        }
+                    }
             }
             None => {}
         }

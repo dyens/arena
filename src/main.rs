@@ -22,6 +22,7 @@ mod game;
 mod object;
 mod tank;
 mod bullet;
+mod brain;
 
 use game::Game;
 use game::S_WIDTH;

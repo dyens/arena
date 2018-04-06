@@ -9,6 +9,7 @@ use object::{Object, Cuboid2f, Vec2};
 use object::component::Component;
 use bullet::Bullet;
 use game::Game;
+use brain::Brain;
 
 
 const TANK_W: u32 = 150;
@@ -26,6 +27,7 @@ pub struct Tank {
     pub health: u32,
     pub is_destroyed: bool,
     collider: Cuboid2f,
+    fire_counter: f64 // for slow fire
 }
 
 impl Tank {
@@ -48,6 +50,7 @@ impl Tank {
             health: 100,
             is_destroyed: false,
             collider: Cuboid2f::new(Vec2::new(width as f64 / 2.0, height as f64 / 2.0)),
+            fire_counter: 0.0,
         }
     }
 
@@ -66,8 +69,9 @@ impl Tank {
         }
     }
 
-    pub fn fire(&self,
+    pub fn fire(&mut self,
                 sprite: Option<&Texture<Resources>>) -> Bullet {
+        self.fire_counter = 0.0;
         let mut bul = Bullet::new(sprite,
                                   self.tank.s_width,
                                   self.tank.s_height,);
@@ -87,30 +91,73 @@ impl Tank {
         let players_data = game.players.iter()
             .filter(|x| x.tank.trans.pos != self.tank.trans.pos)
             .take(1) // we have 1 enemy
-            .map(|x| (x.tank.trans.pos.x, x.tank.trans.pos.y, x.tank.trans.rot)).collect::<Vec<(f64, f64, f64)>>();
+            .map(|x| {
+                let ex = x.tank.trans.pos.x;
+                let ey = x.tank.trans.pos.y;
+
+                let x = self.tank.trans.pos.x;
+                let y = self.tank.trans.pos.y;
+                let distance = ((x - ex).powi(2) +
+                                (y - ey).powi(2)).sqrt();
+
+
+                let tg_alpha = (ex - x) / (ey -y);
+                let alpha = tg_alpha.atan();
+                let delta_alpha = alpha - self.tank.trans.rot;
+                let sin_delta_alpha = delta_alpha.sin();
+                (distance, sin_delta_alpha)
+            }).collect::<Vec<(f64, f64)>>();
+        // TODO: Test this.
 
         let bullets_data = game.bullets.iter()
             .filter(|x| {
                 let xb = x.bullet.trans.pos.x;
-                let xt = self.tank.trans.pos.x;
                 let yb = x.bullet.trans.pos.y;
+                let rb = x.bullet.trans.rot;
+
+                let xt = self.tank.trans.pos.x;
                 let yt = self.tank.trans.pos.y;
 
-                let tg_alpha = (xt - xb) / (yt -yb);
-                let alpha = tg_alpha.atan();
+                let dist = ((xb - xt).powi(2) +
+                            (yb - yt).powi(2)).sqrt();
 
-                let r = x.bullet.trans.rot;
 
-                let v = alpha.cos() * r.cos() - alpha.sin() * r.sin();
+
+                let sin_a = (xt - xb) / dist;
+                let cos_a = (yt - yb) / dist;
+
+                let v = rb.cos() * cos_a - rb.sin() * sin_a;
+
+
+//                let tg_alpha = (xt - xb) / (yt -yb);
+//                let alpha = tg_alpha.atan();
+//
+//                println!("{:?}", alpha);
+//
+//                let r = x.bullet.trans.rot;
+//
+//                let v = alpha.cos() * r.cos() - alpha.sin() * r.sin();
+//                println!("{:?}", v);
                 v > 0.99
             })
             .take(2) // take 2 bullet
-            .map(|x| (x.bullet.trans.pos.x,
-                      x.bullet.trans.pos.y,
-                      x.bullet.trans.rot)
-            ).collect::<Vec<(f64, f64, f64)>>();
+            .map(|x| {
+                let bx = x.bullet.trans.pos.x;
+                let by = x.bullet.trans.pos.y;
+                let brot = x.bullet.trans.rot;
 
-        println!("{:?}", bullets_data.len());
+                let x = self.tank.trans.pos.x;
+                let y = self.tank.trans.pos.y;
+
+                let distance = ((x - bx).powi(2) +
+                                (y - by).powi(2)).sqrt();
+
+                let delta_alpha = brot - self.tank.trans.rot;
+                let sin_delta_alpha = delta_alpha.sin();
+                (distance, sin_delta_alpha)
+            }).collect::<Vec<(f64, f64)>>();
+        // TODO: Test this.
+//        println!("{:?}", bullets_data.len());
 
         let mut data = Vec::with_capacity(12);
         data.push(self.tank.trans.pos.x);
@@ -119,20 +166,32 @@ impl Tank {
         for p in players_data {
             data.push(p.0);
             data.push(p.1);
-            data.push(p.2);
         }
-        for b in bullets_data {
+        for b in &bullets_data {
             data.push(b.0);
             data.push(b.1);
-            data.push(b.2);
         }
+        let brain = Brain::new(
+            data.len(), 3, 1);
 
+        brain.calc(&data);
 
-        TankAction::FWD
+       assert!(data.len()==5 as usize);
+        TankAction::ROT
+
     }
 
+    pub fn can_fire(&self) -> bool {
+        // this is ugly code(need compare time.)
+        // but in training mode we have not time ;-(
+        if self.fire_counter > 0.5 {
+            return true;
+        }
+        false
+    }
 
 }
+
 impl Object for Tank {
     fn mov(&mut self, pos: Vec2) {
         self.tank.trans.mov(pos);
@@ -154,10 +213,14 @@ impl Object for Tank {
         }
     }
 
-    #[allow(unused_variables)]
     fn update(&mut self, dt: f64) {
-//        self.tank.trans.pos = self.tank.trans.pos;
+        if self.fire_counter >= 100.0 {
+            self.fire_counter = 50.0;
+        } else {
+            self.fire_counter += dt;
+        }
     }
+
     fn render(&mut self, v: Matrix2d, g: &mut G2d, ) {
         self.tank.render(v, g);
     }
