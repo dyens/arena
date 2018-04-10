@@ -6,6 +6,7 @@ extern crate nalgebra as na;
 extern crate ncollide as nc;
 extern crate image;
 extern crate argparse;
+extern crate rand;
 
 use argparse::ArgumentParser;
 use argparse::StoreTrue;

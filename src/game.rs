@@ -118,6 +118,7 @@ impl<'a> Game<'a> {
                 .get("tank_sprite"),
             S_WIDTH,
             S_HEIGHT);
+        player.create_brain();
         player.mov_to(Vec2::new(
             S_WIDTH / 4.0, S_HEIGHT / 2.0));
         self.players.push(player);
@@ -127,6 +128,7 @@ impl<'a> Game<'a> {
                 .get("tank_sprite"),
             S_WIDTH,
             S_HEIGHT);
+        player.create_brain();
         player.mov_to(Vec2::new(
             S_WIDTH / 4.0 * 3.0, S_HEIGHT / 2.0));
         self.players.push(player);
@@ -184,11 +186,15 @@ impl<'a> Game<'a> {
                                 self.sprites.get("bullet_sprite")));
                     }
                 }
+                TankAction::STOP => {}
             }
         }
 
         for player in &mut self.players {
             player.update(upd.dt);
+            if let Some(ref mut brain) = player.brain {
+                brain.mutate();
+            }
         }
 
         for bullet in &mut self.bullets {

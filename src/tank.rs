@@ -15,11 +15,13 @@ use brain::Brain;
 const TANK_W: u32 = 150;
 const TANK_H: u32 = 200;
 
+#[derive(Debug)]
 pub enum TankAction {
     FWD,
     ROT,
     UROT,
-    FIRE
+    FIRE,
+    STOP
 }
 
 pub struct Tank {
@@ -27,7 +29,9 @@ pub struct Tank {
     pub health: u32,
     pub is_destroyed: bool,
     collider: Cuboid2f,
-    fire_counter: f64 // for slow fire
+    fire_counter: f64, // for slow fire
+    pub brain: Option<Brain>,
+
 }
 
 impl Tank {
@@ -51,6 +55,7 @@ impl Tank {
             is_destroyed: false,
             collider: Cuboid2f::new(Vec2::new(width as f64 / 2.0, height as f64 / 2.0)),
             fire_counter: 0.0,
+            brain: None,
         }
     }
 
@@ -88,97 +93,90 @@ impl Tank {
 
 
     pub fn get_action(&self, game: &Game) -> TankAction {
-        let players_data = game.players.iter()
-            .filter(|x| x.tank.trans.pos != self.tank.trans.pos)
-            .take(1) // we have 1 enemy
-            .map(|x| {
-                let ex = x.tank.trans.pos.x;
-                let ey = x.tank.trans.pos.y;
+        if let Some(ref brain) = self.brain {
+            let mut players_data = game.players.iter()
+                .filter(|x| x.tank.trans.pos != self.tank.trans.pos)
+                .take(1) // we have 1 enemy
+                .map(|x| {
+                    let ex = x.tank.trans.pos.x;
+                    let ey = x.tank.trans.pos.y;
+                    let erot = x.tank.trans.rot;
 
-                let x = self.tank.trans.pos.x;
-                let y = self.tank.trans.pos.y;
-                let distance = ((x - ex).powi(2) +
-                                (y - ey).powi(2)).sqrt();
-
-
-                let tg_alpha = (ex - x) / (ey -y);
-                let alpha = tg_alpha.atan();
-                let delta_alpha = alpha - self.tank.trans.rot;
-                let sin_delta_alpha = delta_alpha.sin();
-                (distance, sin_delta_alpha)
-            }).collect::<Vec<(f64, f64)>>();
-        // TODO: Test this.
-
-        let bullets_data = game.bullets.iter()
-            .filter(|x| {
-                let xb = x.bullet.trans.pos.x;
-                let yb = x.bullet.trans.pos.y;
-                let rb = x.bullet.trans.rot;
-
-                let xt = self.tank.trans.pos.x;
-                let yt = self.tank.trans.pos.y;
-
-                let dist = ((xb - xt).powi(2) +
-                            (yb - yt).powi(2)).sqrt();
+                    let x = self.tank.trans.pos.x;
+                    let y = self.tank.trans.pos.y;
+                    let distance = ((x - ex).powi(2) +
+                                    (y - ey).powi(2)).sqrt();
+                    let can = self.can_fire() as u32 as f64;
 
 
+                    let tg_alpha = (ex - x) / (ey -y);
+                    let alpha = tg_alpha.atan();
+                    let delta_alpha = alpha - self.tank.trans.rot;
+                    let sin_delta_alpha = delta_alpha.sin();
+                    [distance, sin_delta_alpha, ex, ey, erot, can]
+                })
+                .collect::<Vec<[f64; 6]>>();
 
-                let sin_a = (xt - xb) / dist;
-                let cos_a = (yt - yb) / dist;
+            players_data.sort_by(|a, b| {
+                a[0].partial_cmp(&b[0]).unwrap()});
 
-                let v = rb.cos() * cos_a - rb.sin() * sin_a;
+            let mut bullets_data = game.bullets.iter()
+                .filter(|x| {
+                    let xb = x.bullet.trans.pos.x;
+                    let yb = x.bullet.trans.pos.y;
+                    let rb = x.bullet.trans.rot;
+
+                    let xt = self.tank.trans.pos.x;
+                    let yt = self.tank.trans.pos.y;
+
+                    let dist = ((xb - xt).powi(2) +
+                                (yb - yt).powi(2)).sqrt();
 
 
-//                let tg_alpha = (xt - xb) / (yt -yb);
-//                let alpha = tg_alpha.atan();
-//
-//                println!("{:?}", alpha);
-//
-//                let r = x.bullet.trans.rot;
-//
-//                let v = alpha.cos() * r.cos() - alpha.sin() * r.sin();
-//                println!("{:?}", v);
-                v > 0.99
-            })
-            .take(2) // take 2 bullet
-            .map(|x| {
-                let bx = x.bullet.trans.pos.x;
-                let by = x.bullet.trans.pos.y;
-                let brot = x.bullet.trans.rot;
 
-                let x = self.tank.trans.pos.x;
-                let y = self.tank.trans.pos.y;
+                    let sin_a = (xt - xb) / dist;
+                    let cos_a = (yt - yb) / dist;
 
-                let distance = ((x - bx).powi(2) +
-                                (y - by).powi(2)).sqrt();
+                    let v = rb.cos() * cos_a - rb.sin() * sin_a;
+                    v > 0.99
+                })
+                .take(2) // take 2 bullet
+                .map(|x| {
+                    let bx = x.bullet.trans.pos.x;
+                    let by = x.bullet.trans.pos.y;
+                    let brot = x.bullet.trans.rot;
 
-                let delta_alpha = brot - self.tank.trans.rot;
-                let sin_delta_alpha = delta_alpha.sin();
-                (distance, sin_delta_alpha)
-            }).collect::<Vec<(f64, f64)>>();
-        // TODO: Test this.
-//        println!("{:?}", bullets_data.len());
+                    let x = self.tank.trans.pos.x;
+                    let y = self.tank.trans.pos.y;
+                    let rot = self.tank.trans.rot;
+                    let can = self.can_fire() as u32 as f64;
 
-        let mut data = Vec::with_capacity(12);
-        data.push(self.tank.trans.pos.x);
-        data.push(self.tank.trans.pos.y);
-        data.push(self.tank.trans.rot);
-        for p in players_data {
-            data.push(p.0);
-            data.push(p.1);
+                    let distance = ((x - bx).powi(2) +
+                                    (y - by).powi(2)).sqrt();
+
+                    let delta_alpha = brot - self.tank.trans.rot;
+                    let sin_delta_alpha = delta_alpha.sin();
+                    [distance, sin_delta_alpha, x, y, rot, can]
+                })
+                .collect::<Vec<[f64; 6]>>();
+            bullets_data.sort_by(|a, b| {
+                a[0].partial_cmp(&b[0]).unwrap()});
+
+
+            let r = brain.calc(&players_data, &bullets_data);
+            println!("action: {:?}", r);
+            return r;
         }
-        for b in &bullets_data {
-            data.push(b.0);
-            data.push(b.1);
-        }
+        TankAction::STOP
+    }
+
+    pub fn create_brain(&mut self) {
         let brain = Brain::new(
-            data.len(), 3, 1);
-
-        brain.calc(&data);
-
-       assert!(data.len()==5 as usize);
-        TankAction::ROT
-
+            6, 5, 1,
+            6, 5, 1,
+            5, 1
+        );
+        self.brain = Some(brain);
     }
 
     pub fn can_fire(&self) -> bool {
