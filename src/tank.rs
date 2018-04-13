@@ -10,6 +10,7 @@ use object::component::Component;
 use bullet::Bullet;
 use game::Game;
 use brain::Brain;
+use std::mem;
 
 
 const TANK_W: u32 = 150;
@@ -172,12 +173,23 @@ impl Tank {
 
     pub fn create_brain(&mut self) {
         let brain = Brain::new(
-            6, 5, 1,
-            6, 5, 1,
-            5, 1
+            6, 5,
+            6, 5,
+            5
         );
         self.brain = Some(brain);
     }
+
+    pub fn give_brain(&mut self, brain: Brain) {
+        self.brain = Some(brain);
+    }
+
+    pub fn pick_up_brain(&mut self) -> Option<Brain> {
+        let brain;
+        mem::replace(&mut self.brain, brain);
+        brain
+    }
+
 
     pub fn can_fire(&self) -> bool {
         // this is ugly code(need compare time.)

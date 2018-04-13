@@ -21,7 +21,7 @@ pub fn sig_af(x: f64) -> f64 {
     1.0 / (1.0 + (-x).exp())
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Neuron {
     weights: Vec<f64>,
     act_function: fn(f64) -> f64,
@@ -76,7 +76,7 @@ impl Neuron {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum LayerType {
     IN,
     OUT,
@@ -84,13 +84,11 @@ pub enum LayerType {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Layer {
     neurons: Vec<Neuron>,
     layer_type: LayerType,
-    next: Option<Box<Layer>>,
 }
-
 
 impl Layer {
     pub fn new(n_neurons: usize,
@@ -102,25 +100,39 @@ impl Layer {
         for _ in 0..n_neurons {
             neurons.push(Neuron::new(in_number, act_function));
         }
-//        for _ in 0..n_neurons {
-//            match layer_type {
-//                LayerType::IN => {
-//                    neurons.push(Neuron::new(1, act_function));
-//                }
-//                _ => {
-//                    neurons.push(Neuron::new(in_number, act_function));
-//                }
-//            }
-//        }
 
         Layer{
             neurons: neurons,
             layer_type: layer_type,
-            next: None
         }
     }
 
-    pub fn mutate_layer(&mut self) {
+    pub fn fuck(&self, partner: &Layer) -> (Layer, Layer) {
+        assert!(self.neurons.len() == partner.neurons.len());
+        let middle = self.neurons.len() / 2;
+        let mut neurons = Vec::with_capacity(self.neurons.len());
+        neurons.clone_from_slice(&self.neurons[0..middle]);
+        neurons.extend_from_slice(
+            &partner.neurons[middle..partner.neurons.len()]
+        );
+        let l1 = Layer {
+            neurons: neurons,
+            layer_type: self.layer_type.clone()
+        };
+
+        let mut neurons = Vec::with_capacity(self.neurons.len());
+        neurons.clone_from_slice(&partner.neurons[0..middle]);
+        neurons.extend_from_slice(
+            &self.neurons[middle..self.neurons.len()]
+        );
+        let l2 = Layer {
+            neurons: neurons,
+            layer_type: self.layer_type.clone()
+        };
+        (l1, l2)
+    }
+
+    pub fn mutate(&mut self) {
         let mut rng = thread_rng();
         let n_mutations = rng.gen_range(0, self.neurons.len());
         for _ in 0..n_mutations {
@@ -131,27 +143,9 @@ impl Layer {
 
     }
 
-    pub fn mutate(&mut self) {
-        self.mutate_layer();
-        //TODO: http://cglab.ca/~abeinges/blah/too-many-lists/book/README.html
-    }
-
-
-
-    pub fn push_layer(
-        &mut self,
-        n_neurons: usize,
-        in_number: usize,
-        layer_type: LayerType,
-        act_function: fn(f64) -> f64) {
-        self.next = Some(Box::new(Layer::new(n_neurons,
-                                             in_number,
-                                             layer_type,
-                                             act_function)));
-    }
-
     pub fn calc(&self, input: &[f64]) -> Vec<f64> {
         let mut output: Vec<f64>;
+
 
         match self.layer_type {
             LayerType::OUT => {
@@ -160,23 +154,6 @@ impl Layer {
                 output = Vec::with_capacity(self.neurons.len() + 1);}
         }
 
-//        match self.layer_type {
-//            LayerType::IN => {
-//                assert!(self.neurons.len() == input.len(),
-//                        "neuros={:?}, input={:?}",
-//                        self.neurons.len(),
-//                        input.len());
-//                for i in 0..input.len() {
-//                    output.push(self.neurons[i]
-//                                .calc(&[input[i], ]));
-//                }
-//            }
-//            _ => {
-//                for neuron in &self.neurons {
-//                    output.push(neuron.calc(input));
-//                }
-//            }
-//        }
         for neuron in &self.neurons {
             let a = neuron.calc(input);
             output.push(a);
@@ -187,22 +164,86 @@ impl Layer {
             LayerType::OUT => {}
             _ => {output.push(1.0)}
         }
-
-
-        match &self.next {
-            &Some(ref next) => next.calc(output.as_slice()),
-            &None => output
-
-        }
+        output
     }
 
 }
 
 
+#[derive(Debug)]
+pub struct LayersChain {
+    layers: Vec<Layer>
+}
+
+
+impl LayersChain {
+    pub fn new(description: &Vec<usize>) -> Self {
+        // descrition - neuron numbers in  layers
+        // simple example 6,7,5
+        assert!(description.len() >= 2);
+        let mut layers = Vec::with_capacity(description.len());
+
+        let mut n_inputs = description[0];
+        let layer = Layer::new(n_inputs,
+                               n_inputs,
+                               LayerType::IN,
+                               htan_af);
+        layers.push(layer);
+        n_inputs += 1;
+        for neuron_number in &description[1..description.len()-1] {
+            let layer = Layer::new(*neuron_number,
+                                   n_inputs,
+                                   LayerType::INNER,
+                                   htan_af);
+            layers.push(layer);
+            n_inputs = neuron_number + 1;
+        }
+        let n_outputs = description[description.len() - 1];
+        let layer = Layer::new(n_outputs,
+                               n_inputs,
+                               LayerType::OUT,
+                               sig_af);
+        layers.push(layer);
+//        println!("{:?}", layers);
+        LayersChain{layers}
+    }
+
+    pub fn fuck(&self, partner: &LayersChain)
+                -> (LayersChain, LayersChain) {
+        assert!(self.layers.len() == partner.layers.len());
+        let mut ls1 = Vec::with_capacity(self.layers.len());
+        let mut ls2 = Vec::with_capacity(self.layers.len());
+        for i in 0..self.layers.len() {
+            let (nl1, nl2 ) = self.layers[i].fuck(&partner.layers[i]);
+            ls1.push(nl1);
+            ls2.push(nl2);
+        }
+        (LayersChain{layers: ls1}, LayersChain{layers: ls2})
+    }
+
+
+    pub fn mutate(&mut self) {
+        for layer in &mut self.layers {
+            layer.mutate()
+        }
+    }
+
+    pub fn calc(&self, input: &[f64]) -> Vec<f64> {
+        let mut output  = input.to_vec();
+        for layer in &self.layers {
+            output = layer.calc(&output);
+        }
+        output.to_vec()
+    }
+
+}
+
+
+
 pub struct Brain {
-    layer: Layer,
-    bullet_layer: Layer,
-    tank_layer: Layer,
+    result_chain: LayersChain,
+    bullet_chain: LayersChain,
+    tank_chain: LayersChain,
 }
 
 
@@ -211,96 +252,55 @@ impl Brain {
     pub fn new(
         in_bullet: usize,
         out_bullet: usize,
-        inner_bullet: usize,
-
         in_tank: usize,
         out_tank: usize,
-        inner_tank: usize,
-
-        out_layer: usize,
-        inner_layer:usize,
+        out:usize,
     ) -> Self {
+        let bullet_chain = LayersChain::new(
+            &[in_bullet  + out_bullet + 1,
+             in_bullet + out_bullet + 1,
+             out_bullet].to_vec()
+        );
+        let tank_chain = LayersChain::new(
+            &[in_tank  + out_tank + 1,
+             in_tank + out_tank + 1,
+             out_tank].to_vec()
+        );
+        let result_chain = LayersChain::new(
+            &[out_tank + out_bullet,
+             out_tank + out_bullet, out].to_vec()
+        );
 
+        Brain {result_chain, bullet_chain, tank_chain}
+    }
 
-        let in_bullet = in_bullet + out_bullet + 1;
-        let in_tank = in_tank + out_tank + 1;
+    pub fn fuck(&self, partner: &Brain)
+                -> (Brain, Brain)
+    {
+        let (rc1, rc2) = self.result_chain
+            .fuck(&partner.result_chain);
+        let (bc1, bc2) = self.bullet_chain
+            .fuck(&partner.bullet_chain);
+        let (tc1, tc2) = self.tank_chain
+            .fuck(&partner.tank_chain);
+        (Brain {
+            result_chain: rc1,
+            bullet_chain: bc1,
+            tank_chain: tc1,
+        },
+         Brain {
+             result_chain: rc2,
+             bullet_chain: bc2,
+             tank_chain: tc2,
+         },
+        )
 
-
-        let mut bullet_layer = Layer::new(
-            in_bullet,
-            in_bullet,
-            LayerType::IN,
-            htan_af);
-
-        for _ in 0..inner_bullet {
-            bullet_layer.push_layer(
-                in_bullet,
-                in_bullet + 1,
-                LayerType::INNER,
-                htan_af);
-        }
-
-        bullet_layer.push_layer(
-            out_bullet,
-            in_bullet + 1,
-            LayerType::OUT,
-            sig_af);
-
-
-        let mut tank_layer = Layer::new(
-            in_tank,
-            in_tank,
-            LayerType::IN,
-            htan_af);
-
-        for _ in 0..inner_tank {
-            tank_layer.push_layer(
-                in_tank,
-                in_tank + 1,
-                LayerType::INNER,
-                htan_af);
-        }
-
-        tank_layer.push_layer(
-            out_tank,
-            in_tank + 1,
-            LayerType::OUT,
-            sig_af);
-
-        let in_layer = out_tank + out_bullet;
-        let mut layer = Layer::new(
-            in_layer,
-            in_layer,
-            LayerType::IN,
-            htan_af);
-
-        for _ in 0..inner_layer {
-            layer.push_layer(
-                in_layer,
-                in_layer + 1,
-                LayerType::INNER,
-                htan_af);
-        }
-
-        layer.push_layer(
-            out_layer,
-            in_layer + 1,
-            LayerType::OUT,
-            sig_af);
-
-
-
-        Brain {
-            bullet_layer: bullet_layer,
-            tank_layer: tank_layer,
-            layer: layer
-        }
     }
 
     pub fn mutate(&mut self) {
-        self.bullet_layer.mutate();
-        self.tank_layer.mutate();
-        self.layer.mutate();
+        self.bullet_chain.mutate();
+        self.tank_chain.mutate();
+        self.result_chain.mutate();
     }
 
     pub fn normalize(in_v: &Vec<[f64; 6]>) -> Vec<[f64; 6]> {
@@ -341,7 +341,7 @@ impl Brain {
             tank_out[4] = tank[3];
             tank_out[5] = tank[4];
             tank_out[6] = tank[5];
-            let res = self.tank_layer.calc(&tank_out);
+            let res = self.tank_chain.calc(&tank_out);
             tank_out[7] = res[0];
             tank_out[8] = res[1];
             tank_out[9] = res[2];
@@ -358,7 +358,7 @@ impl Brain {
             bullet_out[4] = bullet[3];
             bullet_out[5] = bullet[4];
             bullet_out[6] = bullet[5];
-            let res = self.bullet_layer.calc(bullet_out.as_slice());
+            let res = self.bullet_chain.calc(bullet_out.as_slice());
             bullet_out[7] = res[0];
             bullet_out[8] = res[1];
             bullet_out[9] = res[2];
@@ -380,7 +380,7 @@ impl Brain {
         ];
 
 
-        let output = self.layer.calc(in_data.as_slice());
+        let output = self.result_chain.calc(in_data.as_slice());
 
         let max_value = output.iter().max_by(|a, b| a.partial_cmp(b).unwrap());
         let max_index = match max_value {
