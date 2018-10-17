@@ -35,12 +35,6 @@ use std::collections::HashMap;
 pub const S_WIDTH: f64 = 800.0;
 pub const S_HEIGHT: f64 = 600.0;
 
-
-
-
-
-
-
 pub struct Game<'a> {
     pub players: Vec<Tank>,
     pub active_player: Option<usize>,

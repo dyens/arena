@@ -184,9 +184,9 @@ impl Tank {
         self.brain = Some(brain);
     }
 
-    pub fn pick_up_brain(&mut self) -> Option<Brain> {
-        let brain;
-        mem::replace(&mut self.brain, brain);
+    pub fn pick_up_brain(mut self) -> Option<Brain> {
+        let brain = self.brain;
+        self.brain = None;
         brain
     }
 
